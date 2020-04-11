@@ -99,6 +99,9 @@ dataset4_mean <- dataset4 %>%
 
 write.csv(dataset4_mean, "mean_measurements_tidy_dataset.csv")
 
+## save this dataset as .txt file for upload purpose
+write.table(dataset4_mean, "mean_measurements_tidy_dataset.txt", row.names = FALSE)
+
 
 ## extract the column names
 column_names <- colnames(dataset4)

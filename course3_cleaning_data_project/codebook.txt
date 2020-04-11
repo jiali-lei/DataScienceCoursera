@@ -69,6 +69,7 @@ The complete list of variables of each feature vector is available in 'combined_
 
 ==================================
 mean_measures_tidy_dataset.csv 
+(mean_measures_tidy_dataset.txt)
 ================================== 
 
 subjectID

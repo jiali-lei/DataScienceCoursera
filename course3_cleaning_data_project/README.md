@@ -5,7 +5,7 @@ date: "4/10/2020"
 output: text markdown document
 ---
 
-=================================================
+
 **Getting and Cleaning Data Course Project**
 =================================================
 
@@ -23,12 +23,15 @@ This directory includes the following file:
 * README.md
 * run_analysis.R
 * UCI HAR Datatset
+
         + it contains the raw data and its own README.txt file explaining details
 * codebook.txt
 * output files from run_analysis.R
+
         + combined_tidy_dataset.csv
         + combined_variable_names.csv
         + mean_measurements_tidy_dataset.csv
+        + mean_measurements_tidy_dataset.txt
         + mean_measurements_variable_names.csv
         
 
@@ -40,4 +43,4 @@ run_analysis.R does the following to the UCI HAR Dataset:
 4. Appropriately labels the data set with descriptive variable names.
         + outputs 'combined_tidy_dataset.csv'
 5. From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
-        + outputs 'mean_measurements_tidy_dataset.csv'
+        + outputs 'mean_measurements_tidy_dataset.csv' & 'mean_measurements_tidy_dataset.txt'
