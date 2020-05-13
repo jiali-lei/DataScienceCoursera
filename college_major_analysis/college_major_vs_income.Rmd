@@ -1,0 +1,42 @@
+---
+title: "Data Analysis Practice - College Major Analysis"
+author: "JLei"
+date: "5/12/2020"
+output: html_document
+---
+
+This is to study how income varies across college major categories. 
+
+__Key Question__: Is there an association between college major category and income?
+
+First, set directory and/or create file path.
+```{r}
+if (!file.exists("college_major_analysis")) {
+    dir.create("college_major_analysis")
+}
+```
+
+Next load a data.frame called college to work with.
+```{r results='hide', message=FALSE}
+install.packages("devtools")
+devtools::install_github("jhudsl/collegeIncome")
+library(collegeIncome)
+data(college)
+```
+
+Then download and install the matahari R package to record the analysis (the R command history).
+```{r results='hide', message=FALSE}
+devtools::install_github("jhudsl/matahari")
+library(matahari)
+```
+
+Before the start of the analysis, enter the following command:
+```{r results='hide'}
+dance_start(value=FALSE, contents=FALSE)
+```
+
+After finishing the analysis, use the following command to save the record of the analysis on the directory:
+```{r}
+dance_save("/college_major_analysis/college_major_analysis.rds")
+```
+
