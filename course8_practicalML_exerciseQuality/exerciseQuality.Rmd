@@ -1,0 +1,154 @@
+---
+title: "Practical Machine Learning - How Well Do You Lift?"
+author: "JLei"
+date: "5/22/2020"
+output: html_document
+---
+
+### Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do with these measurement data is to quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will use the Weight Lifting Exercises dataset to investigate "how (well)" an activity wasperformed by the participant, and to predict the manner (related to the "classe" variable) in which they did the exercise.
+
+
+### Data
+
+Data from accelerometers on the belt, forearm, arm, and dumbell of 6 young healthy participants were recorded, while they were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. 
+
+The training data for this project are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+
+### Data Analysis -- Processing & Exploration
+
+First, load the training and test data sets using the following commands:
+```{r}
+## read in the csv datasets
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+## preliminary info on the datasets
+dim(training); dim(testing)
+str(training$classe); summary(training$classe)
+str(training[,1:20])
+mean(is.na(training))
+```
+
+At the first glance, there are 160 variables in both the training and testing datasets. However, the first 7 columns/variables are not related to activities, and there are columns consisting entirely or partially of NAs. There are 41% of NAs in the entire training set. To clean up the datasets more, we will narrow down the variables by removing the first 7 columns, columns with entirely NAs, and columns with a significant amount of NAs, followed by columns with almost zero variance.
+```{r}
+library(caret)
+library(dplyr)
+
+## remove first 7 columns
+training <- training[, -c(1:7)]
+
+## remove columns/variables with more than 90% NAs
+colNA <- which(apply(training, 2, function(x) mean(is.na(x)) > .9))
+training <- training[, -colNA]
+
+## remove variables that are near 0 variance
+zeroVar <- nearZeroVar(training)
+training <- training[, -zeroVar]
+
+testing <- testing %>% select(colnames(training[, -ncol(training)]))
+
+```
+
+
+### Data Analysis -- Machine Learning & Prediction
+
+For this classification problem, we will explore 3 different models/methods -- redursive partitioning and regression trees (rpart), random forest (randomForest, or "rf"), and generalized linear model for multinomial. To assess the out-of-sample errors of these models, we can use partition the training dataset into train and test and evaluate the error on the test subset. [NOTE: this test subset is different from the original testing dataset.] Or we can use built-in cross-validation methods when appropriate to evaluate the out-of-sample error. Lastly, we can compare the out-of-sample error of these 3 models and apply the appropriate one to the original testing dataset to classify the exercise "classe", in turn evaluating how "well" a participant does the dumbbells bicep curls.
+
+Here we partition the training dataset into train and test subsets:
+```{r}
+set.seed(13531)
+inTrain <- createDataPartition(training$classe, p=0.8)[[1]]
+train_sub <- training[inTrain,]; test_sub <- training[-inTrain,]
+```
+
+##### Recursive Partitioning and Regression Tree - "rpart"
+```{r}
+library(rpart)
+set.seed(3434)  # result may vary between console and knitr despite setting a seed.
+rpartFit <- rpart(classe~., data=train_sub, method="class")
+
+## predict classification on test subset and calculate the accuracy
+rpartPred <- predict(rpartFit, test_sub, type="class")
+rpartAccuracy <- confusionMatrix(test_sub$classe, rpartPred)$overall[1]
+rpartAccuracy  # test_sub classification accuracy
+## train_sub classification accuracy
+confusionMatrix(train_sub$classe, 
+                predict(rpartFit, 
+                        train_sub,
+                        type="class"))$overall[1]
+```
+The test subset with "rpart" model fit on train subset produced an out-of-sample error of 1-0.746 = **25.4%**. NOTE: prediction may vary between predict() function calls.
+
+##### Classification with Random Forest
+```{r}
+library(randomForest)
+set.seed(3535)
+rfFit <- randomForest(classe~., data=train_sub, ntree=10)
+
+## predict classification on test subset and calculate the accuracy
+rfPred <- predict(rfFit, test_sub)
+rfAccuracy <- confusionMatrix(test_sub$classe, rfPred)$overall[1]
+rfAccuracy  # test_sub classification accuracy
+## train_sub classification accuracy
+confusionMatrix(train_sub$classe, 
+                predict(rfFit, 
+                        train_sub))$overall[1]
+```
+The test subset with randomForest model fit on train subset produced an out-of-sample error of 1-0.989 = **1.1%**, which suggests a better prediction than classification tree "rpart". Please note that this model fit set "ntree"=10 in the argument to speed up the model training. The accuracy become better with higher "ntree" up to an extent. 
+
+##### Generalized Linear Model Network
+```{r cache=TRUE}
+library(glmnet)
+set.seed(98989)
+cvfit <- cv.glmnet(x=as.matrix(training[,-ncol(training)]), 
+                   y=training[,ncol(training)], 
+                   family="multinomial", nfold=5,
+                   type.measure="class")
+plot(cvfit)
+confusion.glmnet(cvfit,
+                 newx=as.matrix(training[, -ncol(training)]),
+                 newy=training[, ncol(training)],
+                 s="lambda.min")
+confusion.glmnet(cvfit,
+                 newx=as.matrix(training[, -ncol(training)]),
+                 newy=training[, ncol(training)],
+                 s="lambda.1se")
+```
+
+When using "cv.glmnet", the original training dataset was passed in for the model fitting. Setting "nfold=5" is similar to partitioning the dataset to 80% sub-train and 20% sub-test (as the previous two model fits), but it's doing cross-validation 5 folds/times across many lambda (or lasso penalty) values. 
+
+The plot includes the cross-validation curve (red dotted line), and upper and lower standard deviation curves along the $\lambda$ sequence (error bars). Two selected $\lambda$’s are indicated by the vertical dotted lines, one of them is the **lambda.min** that produces minimal misclassification error and the other is **lambda.1se** that produces a misclassification error within 1 standard deviation from **lambda.min** but includes fewer variables in the model (to keep the model more parsimonious). Note the numbers on top of the graph indicate the number of variables kept in the model fit.
+
+The misclassification error that approximiates the out-of-sample error from the training dataset with 5-fold cross-validation is 1-0.74 = **26%**.
+
+
+##### Prediction Results on Test Dataset
+
+We'll use the model fit from random forest for its better/lower out-of-sample misclassification error.
+```{r}
+testPred <- predict(rfFit, testing)
+testPred
+
+## can also see the outcome predicted by the other two models
+## predict(cvfit, as.matrix(testing), type="class")
+## predict(rpart, testing, type="class")
+```
+
+
+
+### Reference
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H.; **Qualitative Activity Recognition of Weight Lifting Exercises.** Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: [http://groupware.les.inf.puc-rio.br/har#ixzz6NCUOaCgw](http://groupware.les.inf.puc-rio.br/har#ixzz6NCUOaCgw)
