@@ -1,0 +1,32 @@
+## Popular California National Parks 
+
+### June 1st, 2020
+
+```{r, eval=TRUE, echo=FALSE, fig.align='center'}
+library(leaflet)
+parksIcon <- makeIcon(
+        iconUrl = "https://commons.wikimedia.org/wiki/File:US-NationalParkService-Logo.svg",
+        iconWidth = 31*720/553, 
+        iconHeight = 31,
+        iconAnchorX = 31*720/553/2,
+        iconAnchorY = 16
+)
+
+parksLatLong <- data.frame(
+        lat = c(37.8970199, 37.8529755, 35.155183, 33.8996632, 41.5436023),
+        lng = c(-122.5833117, -119.8319766, -115.4505354, -116.1415491, -124.7509066)
+)
+
+parksSites <- c(
+        "<a href='https://www.nps.gov/muwo/index.htm'>Muir Woods</a>",
+        "<a href='https://www.nps.gov/yose/index.htm'>Yosemite</a>",
+        "<a href='https://www.nps.gov/moja/index.htm'>Mojave</a>",
+        "<a href='https://www.nps.gov/jotr/index.htm'>Joshua Trees</a>",
+        "<a href='https://www.nps.gov/redw/index.htm'>Redwood National & State Park<a/>"
+)
+
+parksLatLong %>%
+        leaflet() %>%
+        addTiles() %>%
+        addMarkers(icon=parksIcon, popup=parksSites)
+```
