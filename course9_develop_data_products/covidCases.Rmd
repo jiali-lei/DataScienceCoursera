@@ -1,0 +1,105 @@
+---
+title: "COVID19 Cases"
+author: "Jiali Lei"
+date: "6/1/2020"
+output: ioslides_presentation
+---
+
+## COVID19 Confirmed Number in the U.S.
+
+```{r, echo=FALSE, eval=TRUE, fig.align='center', message=FALSE}
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(lubridate)
+
+## read csv data in from github, for covid cases in time series.
+covid_confirm_US <-read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv", header=TRUE, sep=",")
+
+header <-read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv", nrows=1, header=FALSE, sep=",", colClasses="character")
+
+covid_death_US <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv", header=TRUE, sep=",")
+
+## extract the dates from the header of the csv file
+dates <- mdy(header[1,12:ncol(header)])
+
+## subset the covid datasets to have only daily cases
+confirm <- covid_confirm_US[, 12:ncol(covid_confirm_US)]
+death <- covid_death_US[, 13:ncol(covid_death_US)]
+
+## sum up the total cases across the U.S. for each day
+us_confirm <- sapply(confirm, sum)
+us_death <- sapply(death, sum)
+
+## construct a data frame with dates, us_confirm, us_death
+df <- data.frame(Date=dates, confirmed_case=us_confirm, confirmed_death=us_death, row.names = NULL)
+
+## plot with plot_ly() function
+fig <- plot_ly(df, x=~Date)
+fig <- fig %>% 
+        add_trace(y=~confirmed_case, 
+                  type="scatter", 
+                  mode="lines", 
+                  name="COVID19 Confirmed Cases in the U.S.", 
+                  text=~paste("Confirmed Cases: ", confirmed_case, "<br>Date: ", Date)) %>%
+        add_trace(y=~confirmed_death, 
+                  type="scatter", 
+                  mode="lines", 
+                  name="COVID19 Confirmed Death in the U.S.", 
+                  text=~paste("Confirmed Death: ", confirmed_death, "<br>Date: ", Date)) %>%
+        layout(title="COVID19 Cases and Death - Daily Monitor",
+               xaxis=list(title="Date"),
+               yaxis=list(title="Confirmed Number"))
+fig
+```
+
+## COVID19 Confirmed Cases Across the U.S.
+```{r, eval=TRUE, echo=FALSE, fig.align='center', message=FALSE}
+# convert 'Province_State' from factor to character
+covid_confirm_US$Province_State <- as.character(covid_confirm_US$Province_State)
+# subset only the states and the daily cases columns
+# group by 'Province_State'
+# sum up the daily cases
+state_cases <- covid_confirm_US %>%
+        select(contains("Province_State"), starts_with("X")) %>%
+        group_by(Province_State) %>%
+        filter(Province_State %in% state.name) %>%
+        summarise_each(sum)
+
+# Sutset data frame
+state_cases2 <- state_cases %>%
+        select(Province_State, X3.28.20, X6.1.20)
+
+# Create a State data frame
+state_abb_names <- data.frame(Abbr = state.abb, Name = state.name)
+
+state_merge <- merge(state_cases2, state_abb_names, by.x="Province_State", by.y="Name")
+# Create hover text
+state_merge$hover <- with(state_merge, 
+                        paste(Abbr, 
+                              "<br>Cases on 03/28/2020: ", X3.28.20, 
+                              "<br>Cases on 06/01/2020: ", X6.1.20))
+# Make state borders white
+borders <- list(color = toRGB("red"))
+# Set up some mapping options
+map_options <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white')
+)
+
+plot_ly(z = ~state_merge$X6.1.20, 
+        text = ~state_merge$hover, 
+        locations = ~state_merge$Abbr, 
+        type = 'choropleth', 
+        locationmode = 'USA-states', 
+        color = state_merge$X6.1.20, 
+        colors = 'Blues', 
+        marker = list(line = borders)) %>%
+  layout(title = 'US Confirmed COVID19 Cases as of 06/01/2020', geo = map_options)
+```
+
+## Reference
+
+The [dataset](https://github.com/CSSEGISandData/COVID-19) is being collated by Johns Hopkins University Center for Systems Science and Engineering (JHU CCSE). 
