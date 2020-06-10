@@ -22,4 +22,4 @@ To view the shiny app and interact with the Heart Disease Risk Calculator, use t
 To view the presentation, use either links below:
 
 - [https://rpubs.com/jLei/CVD_Risk_Score](https://rpubs.com/jLei/CVD_Risk_Score)
-- [https://jiali-lei.github.io/DataScienceCoursera/course9_develop_data_products/CVD_Risk_Score.html](https://jiali-lei.github.io/DataScienceCoursera/course9_develop_data_products/CVD_Risk_Score.html)
+- [https://jiali-lei.github.io/DataScienceCoursera/course9_develop_data_products/Heart_Disease_Risk/CVD_RiskScore.html](https://jiali-lei.github.io/DataScienceCoursera/course9_develop_data_products/Heart_Disease_Risk/CVD_RiskScore.html)
