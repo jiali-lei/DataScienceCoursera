@@ -11,3 +11,4 @@ Linear models, as their name implies, relates an outcome to a set of predictors 
 ### My project can be found in this repo:
 
 - Motor Trend - Automatic VS Manual Transmission
+- College Major Analysis
