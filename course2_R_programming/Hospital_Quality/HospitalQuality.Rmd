@@ -1,0 +1,238 @@
+---
+title: "HospitalQuality.Rmd"
+author: "JLei"
+date: "4/4/2020"
+output: html_document
+---
+
+
+#### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+
+########### **1    Plot the 30-day mortality rates for heart attack**
+
+```{r}
+## load the 'outcome-of-care-measures.csv' into a data frame "outcome"
+outcome <- read.csv("outcome-of-care-measures.csv", colClasses = "character")
+
+## coerce '30-day death rates from heart attack' to numeric and make a hist
+## don't warry about NAs for now
+outcome[, 11] <- as.numeric(outcome[, 11])
+hist(outcome[, 11])
+```
+
+
+########### **2    Finding the best hospital in a state**
+
+Below is a function called **best** that take 2 arguments: the 2-char abbr. name of a state and an outcome name. The function reads the **outcome-of-care-measures.csv** file and returns a char vector with the name of the hospital that has the best (ie. lowest) 30-day mortality for the specified outcome (ie. "heart attack", "heart failure", or "pneumonia") in that state.
+
+**Handling ties**. If there is a tie for the best hospital for a given outcome, return the first hospital from the sorted names in an alphabetical order.
+
+```{r}
+best <- function(state, outcome) {
+        ## Read outcome data
+        f <- read.csv("outcome-of-care-measures.csv", colClasses = "character")
+        f[, 11] <- as.numeric(f[, 11])
+        f[, 17] <- as.numeric(f[, 17])
+        f[, 23] <- as.numeric(f[, 23])
+        
+        ## Check that state and outcome are valid
+        valid_outcome <- c("heart attack", "heart failure", "pneumonia")
+        if (!(outcome %in% valid_outcome)) {
+                stop("invalid outcome")
+        }
+        if (!(state %in% state.abb)) {
+                stop("invalid state")
+        }
+        
+        ## Return hospital name in that state with lowest 30-day death rate
+        
+        ## load 'dplyr' packages
+        library(dplyr)
+        library(tidyr)
+        
+        ## subset the outcome data with 5 necessary columns
+        f_sub <- f %>% 
+                select(Hospital.Name, 
+                       State, 
+                       HeartAttack = Hospital.30.Day.Death..Mortality..Rates.from.Heart.Attack, 
+                       HeartFailure = Hospital.30.Day.Death..Mortality..Rates.from.Heart.Failure, 
+                       Pneumonia = Hospital.30.Day.Death..Mortality..Rates.from.Pneumonia)
+        
+        ## further subset by 'state'
+        f_sub_state <- f_sub %>% filter(State == state)
+        
+        ## return the 1st value of the 'Hospital.Name' after sorting 'outcome' in ascending order and 'Hospital.Name' in alphabetical order
+        if (outcome == valid_outcome[1]) {
+                f_final <- f_sub_state %>% drop_na(HeartAttack) %>% arrange(HeartAttack, Hospital.Name)
+                return(f_final$Hospital.Name[1])
+        }
+        else if (outcome == valid_outcome[2]) {
+                f_final <- f_sub_state %>% drop_na(HeartFailure) %>% arrange(HeartFailure, Hospital.Name)
+                return(f_final$Hospital.Name[1])
+        }
+        else {
+                f_final <- f_sub_state %>% drop_na(Pneumonia) %>% arrange(Pneumonia, Hospital.Name)
+                return(f_final$Hospital.Name[1])
+        }
+}
+
+
+## Test cases below
+
+## expected: "CYPRESS FAIREBANKS MEDICAL CENTER"
+best("TX", "heart attack")
+
+## expected: "FORT DUNCAN MEDICAL CENTER"
+best("TX", "heart failure")
+
+## expected: "JOHNS HOPKINS HOSPITAL, THE"
+best("MD", "heart attack")
+
+## expected: "GREATER BALTIMORE MEDICAL CENTER"
+best("MD", "pneumonia")
+
+## expected: Error in best("BB", "heart attack") : invalid state
+## best("BB", "heart attack")
+
+## expected: Error in best("NY", "hert attack") : invalid outcome
+## best("NY", "hert attack")
+
+```
+
+
+
+########### **3    Ranking hospitals by outcome in a state**
+
+Below is a function **rankhospital** that takes 3 arguments: the 2-char abbr. name of a state ( _state_), an outcome ( _outcome_), and the ranking of a hospital in that state for that outcome ( _num_). This function reads the **outcome-of-care-measures.csv** file and returns a char vector with the name of the hospital that has the ranking specified by the _num_ argument.
+
+**Handling ties**. If there is a tie among multiple hospitals for a given outcome, rank the hospitals in alphabetical order.
+
+```{r}
+rankhospital <- function(state, outcome, num = "best") {
+        ## call 'best' function if no input to 'num' argument
+        if (num == "best") {
+                best(state, outcome)
+        }
+        
+        ## Read outcome data
+        f <- read.csv("outcome-of-care-measures.csv", colClasses = "character")
+        f[, 11] <- as.numeric(f[, 11])
+        f[, 17] <- as.numeric(f[, 17])
+        f[, 23] <- as.numeric(f[, 23])
+        
+        ## Check that state and outcome are valid
+        valid_outcome <- c("heart attack", "heart failure", "pneumonia")
+        if (!(outcome %in% valid_outcome)) {
+                stop("invalid outcome")
+        }
+        if (!(state %in% state.abb)) {
+                stop("invalid state")
+        }
+        if (!is.numeric(num) & !(num %in% c("best","worst"))) {
+                stop("invalid num")
+        }
+        
+        ## Return hospital name in that state with lowest 30-day death rate
+        
+        ## load 'dplyr' packages
+        library(dplyr)
+        library(tidyr)
+        
+        ## subset the outcome data with 5 necessary columns
+        f_sub <- f %>% 
+                select(Hospital.Name, 
+                       State, 
+                       HeartAttack = Hospital.30.Day.Death..Mortality..Rates.from.Heart.Attack, 
+                       HeartFailure = Hospital.30.Day.Death..Mortality..Rates.from.Heart.Failure, 
+                       Pneumonia = Hospital.30.Day.Death..Mortality..Rates.from.Pneumonia) 
+        
+        ## further subset by 'state'
+        f_sub_state <- f_sub %>% filter(State == state)
+        
+        ## return the num_th value of the 'Hospital.Name' after sorting 'outcome' in ascending order and 'Hospital.Name' in alphabetical order
+        if (outcome == valid_outcome[1]) {
+                f_final <- f_sub_state %>% drop_na(HeartAttack) %>% arrange(HeartAttack, Hospital.Name)
+                l <- length(f_final$State)
+                ## return the last 'Hospital.Name' for the "worst" ranked
+                if (num == "worst") {
+                        return(f_final$Hospital.Name[l])
+                }
+                else if (num > l) {
+                        return(NA)
+                }
+                return(f_final$Hospital.Name[num])
+        }
+        
+        else if (outcome == valid_outcome[2]) {
+                f_final <- f_sub_state %>% drop_na(HeartFailure) %>% arrange(HeartFailure, Hospital.Name)
+                l <- length(f_final$State)
+                if (num == "worst") {
+                        return(f_final$Hospital.Name[l])
+                }
+                else if (num > l) {
+                        return(NA)
+                }
+                return(f_final$Hospital.Name[num])
+        }
+        
+        else {
+                f_final <- f_sub_state %>% drop_na(Pneumonia) %>% arrange(Pneumonia, Hospital.Name)
+                l <- length(f_final$State)
+                if (num == "worst") {
+                        return(f_final$Hospital.Name[l])
+                }
+                else if (num > l) {
+                        return(NA)
+                }
+                return(f_final$Hospital.Name[num])
+        }
+}
+
+
+## Test cases below
+
+## expected: "DETAR HOSPITAL NAVARRO"
+rankhospital("TX", "heart failure", 4)
+
+## expected: "HARFORD MEMORIAL HOSPITAL"
+rankhospital("MD", "heart attack", "worst")
+
+## expected: NA
+rankhospital("MN", "heart attack", 5000)
+
+```
+
+
+########### **4     Ranking hospitals in all states**
+
+Below is a function called **rankall** that takes 2 arguments: an outcome name ( _outcom_) and a hospital ranking ( _num_). The function reads the **outcome-of-care-measures.csv** file and returns a 2-column data frame containing the hospital in each state that has the ranking specified in _num_. The function should return a value for every state (some may be **NA**). The first column in the data frame is named **hospital**, which contains the hospial name, and the second column is named **state**, which contains the 2-char abbr. for the state name. Hospitals that do not have data on a particular outcome should be excluded from the set of hospitals when deciding the rankings. 
+
+**Handling ties**. The **rankall** function should handle ties in the 30-day mortality rate in the same way that the **rankhospital** function handle ties.
+
+```{r}
+rankall <- function(outcome, num = "best"){
+        ## make a char vector of 'hospital' by running 'rankhospital' function with all states
+        hospital <- character()
+        for (i in state.abb) {
+                new_hospital <- rankhospital(i, outcome, num)
+                hospital <- append(hospital, new_hospital)
+        }
+        
+        ## make a data frame with 2 columns
+        ## col1 is hospitals from above
+        ## col2 is states in alphabetical order
+        data.frame("hospital" = hospital, state = state.abb)
+}
+
+
+## Test cases below
+## head(rankall("heart attack", 20), 10)
+## tail(rankall("pneumonia", "worst"), 3)
+## tail(rankall("heart failure"), 10)
+
+```
