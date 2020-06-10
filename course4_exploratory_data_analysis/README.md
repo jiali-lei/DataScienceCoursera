@@ -13,5 +13,5 @@ This course covers the essential exploratory techniques for summarizing data. Th
 
 ### My Projects in this Repo:
 
-1. Electric Power Consumption  
+1. Electric Power Consumption  (refer to a different repo on my GitHub [here](https://github.com/jiali-lei/ExData_Plotting1) )
 2. Air Pollution PM2.5
