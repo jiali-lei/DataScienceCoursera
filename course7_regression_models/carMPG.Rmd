@@ -1,0 +1,88 @@
+---
+title: "Which Has a Better MPG, Auto or Manual Transmission?"
+author: "JLei"
+date: "5/14/2020"
+output: pdf_document
+---
+
+### Executive Summary
+
+This data analysis on a dataset of a collection of cars explores the relationship between a set of variables and miles per gallon (MPG)(outcome). In particular, it addresses whether an automatic or manual transmission is better for MPG, and it quantifies the MPG difference between the two transmission types. Although a manual transmission yields more MPG than an automatic trnasmission with no other variables considered, the two transmissions are not very different in MPG. 
+
+### Data Analysis
+
+We'll begin by loading the _mtcars_ data and perform some basic exploratory data analysis.
+```{r}
+library(datasets)
+data("mtcars")
+dim(mtcars)
+head(mtcars)
+```
+
+For some variables, it's more meaningful to convert their values to factors.
+```{r}
+mtcars2 <- within(mtcars, {
+        vs <- factor(vs, labels = c("V", "S")); 
+        am <- factor(am, labels = c("automatic", "manual")); 
+        cyl  <- factor(cyl); 
+        gear <- factor(gear); 
+        carb <- factor(carb)})
+summary(mtcars2)
+pairs(mtcars2, main = "mtcars data", gap = 1/4)
+```
+
+**Linear Regression**
+Since the paired plots show that all other variables have an impact on car's MPG, let's fit a linear model with MPG as outcome to all the other variables.
+```{r}
+library(broom)
+lmfit <- lm(mpg ~ ., data = mtcars2)
+tidy(lmfit)
+```
+The coefficient for variable _am_ when it's manual transmission is **1.212** with **p=0.71**, indicating that there is no significant evidence to reject that an automatic and manual transmission yields similar MPG. The manual transmission produces 1.212 MPG more than the automatic transmission, but the p-value of 0.71 sugests that it's not significant with 95% confidence level.
+
+Then, let's investigate which covariate is inflating the variance and can be excluded in the next model fit.
+```{r}
+library(car)
+sqrt(vif(lmfit))
+anova(lmfit)
+```
+_cyl_, _disp_, _hp_, _gear_ are considered variance inflation factor; however, analysis of variance anova() of the model fit _lmfit_ shows that _cyl_, _disp_, and _wt_ are significant in cars' MPG. Hence we will include _cyl_, _disp_, and _wt_ in the next model fit to better investigate the impact of transmission ( _am_).
+
+Next, let's fit a linear model with MPG regressing on transmission type ( _am_), _cyl_, _disp_, and _wt_.
+```{r}
+library(broom)
+fit1 <- lm(mpg ~ cyl+disp+wt+am, data = mtcars2)
+tidy(fit1)
+```
+
+Holding constant the number of cylinders ( _cyl_), displacement ( _disp_), and weight ( _wt_), we don't see much effect of transmission type on MPG. A manual transmission car would have **0.14** MPG more than an automatic tranmission car, and **p=0.91** suggests it's not significant to reject that a manual transmission is not different from an automatic when it comes to MPG. 
+
+```{r}
+anova(fit1, lmfit)
+```
+**p=0.72** suggests that the additional variables in _lmfit_ is not necessary to include for analyzing the impact of transmission on MPG.
+
+Now, let's check if regression assumptions are met with some diagnostic plotting:
+```{r fig.height=4, fig.width=8}
+resid <- residuals(fit1)
+fitted <- fitted.values(fit1)
+plot(density(resid), xlab="Residuals", ylab="Density", main="Residual Distribution")
+```
+```{r fig.height=5, fig.width=8}
+plot(fitted, resid, xlab="Predicted Values", ylab="Residuals")
+abline(h=0, col="red", lty="dashed")
+```
+Normality assumptions don't seem far off, and heteroskedasticity doesn't seem to be an issue. 
+
+Overall, there doesn't seem to be an effect of transmission type on MPG with this dataset of a collection of cars.
+
+
+**[Optional Read]**
+If we only fit MPG to transmission type:
+```{r}
+fit2 <- lm(mpg ~ am, data = mtcars2)
+tidy(fit2)
+```
+The coefficient for variable _ammanual_ when it's manual transmission is **7.24** with **p=0.00029**, indicating that there is significant evidence to reject that an automatic and manual transmission yields similar MPG. The manual transmission produces 7.24 MPG more than the automatic transmission, and the p-value of 0.00029 sugests that it's significant with 95% confidence level. 
+
+BUT, WATCH OUT FOR SIMPSON'S PARADOX!
