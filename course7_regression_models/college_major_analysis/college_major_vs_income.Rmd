@@ -11,8 +11,8 @@ __Key Question__: Is there an association between college major category and inc
 
 First, set directory and/or create file path.
 ```{r}
-if (!file.exists("college_major_analysis")) {
-    dir.create("college_major_analysis")
+if (!file.exists("college_major_vs_income")) {
+    dir.create("college_major_vs_income")
 }
 ```
 
@@ -37,6 +37,6 @@ dance_start(value=FALSE, contents=FALSE)
 
 After finishing the analysis, use the following command to save the record of the analysis on the directory:
 ```{r}
-dance_save("/college_major_analysis/college_major_analysis.rds")
+dance_save("~/Desktop/college_major_analysis.rds")
 ```
 
