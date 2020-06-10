@@ -1,0 +1,116 @@
+---
+title: "Statistical Inference Course Project - Part 2"
+author: "JLei"
+date: "5/1/2020"
+output: pdf_document
+---
+
+### Part 2 - Basic Inferential Data Analysis
+
+This part allows one to analyze the ToothGrowth data in the R dataset package.
+
+1. Load the ToothGrowth data and perform some basic exploratory data analysis.
+```{r}
+library(datasets)
+data(ToothGrowth)
+dim(ToothGrowth)
+head(ToothGrowth, 3)
+str(ToothGrowth)
+```
+
+2. Provide a basic summary of the data
+```{r}
+summary(ToothGrowth)
+```
+
+```{r}
+library(ggplot2)
+ggplot(ToothGrowth, aes(supp, len, fill=supp)) +
+        facet_grid(.~dose) +
+        geom_boxplot() +
+        labs(title="Tooth growth by supplement type and dosage",
+             x="Supplement type",
+             y="Tooth length")
+```
+
+There is a positive effect of dosage on tooth growth, such that tooth length increases as dosage increases. The positive effect of dosage appears to be linear with the supplement "VC", while the positive effect seems to plataeu with "OJ" at 2mg dosage. Generally "OJ" appears to induce higher tooth growth than "VC", except at the dosage of 2mg.
+
+3. Use confidence intervals and/or hypothesis tests to compare tooth growth by supp and dose. 
+
+* **Hypothesis to compare OJ and VC**  
+Let the null hypothesis be that there is no difference in tooth growth between the use of the supplement of OJ and VC.  
+**len~OJ~ = len~VC~**
+
+Let the alternative hypothesis be that there is more growth in tooth with the use of the supplement of OJ than VC.  
+**len~OJ~ > len~VC~**
+
+Now let's subset the data by supplement.
+```{r}
+OJ <- ToothGrowth$len[ToothGrowth$supp=="OJ"]
+VC <- ToothGrowth$len[ToothGrowth$supp=="VC"]
+```
+
+Then perform a one-sided t-test to test our hypothesis.
+```{r}
+t.test(OJ, VC, alternative = "greater", paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+```
+The p-value of 0.03032 can be interpreted as there is about 3% of chance for an extreme value in the difference of the mean in tooth growth. Since it is lower than alpha=0.5, then we reject the null hypothesis. In other words, we can conclude that the supplement OJ is likely to induce greater tooth growth than VC.
+
+* **Hypothesis to compare dosage**
+Let the null hypothesis be that there is no difference in tooth growth between dosage.  
+**len~0.5~ = len~1~** and **len~1~ = len~2~**
+
+Let the alternative hypothesis be that there is more growth in tooth with higher dosage than lower dosage.  
+**len~0.5~ < len~1~** and **len~1~ < len~2~**
+
+First, let's subset the data by dosage.
+```{r}
+halfdose <- ToothGrowth$len[ToothGrowth$dose==0.5]
+onedose <- ToothGrowth$len[ToothGrowth$dose==1]
+twodose <- ToothGrowth$len[ToothGrowth$dose==2]
+```
+
+Next perform a one-sided t-test to compare tooth growth by half dosage and one dosage.
+```{r}
+t.test(halfdose, onedose, alternative = "less", paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+```
+We can conclude that the dosage of 1mg is likely to stimulate greater tooth growth than 0.5mg since the p-value of 6.342e-08 is very much less than alpha=0.5 (thus we rejected the null hypothesis of **len~0.5~ = len~1~**).
+
+Then perform a one-sided t-test to compare tooth growth by one dosage and two dosages.
+```{r}
+t.test(twodose, onedose, alternative = "greater", paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+```
+Similarly, we can conclude that the dosage of 2mg is likely to stimulate greater tooth growth than 1mg since the p-value of 9.532e-06 is very much less than alpha=0.5 (thus we rejected the null hypothesis of **len~1~ = len~2~**).
+
+Although t-test was not performed to compare 2mg vs 0.5mg, the above two tests suggests that we would very likely to reject **len~0.5~ = len~2~**.
+
+Finally, we can draw a conclusion that the tooth growth increases as the dosage increases.
+
+* **Hypothesis to compare OJ and VC at dosage 2mg**
+Let the null hypothesis be that there is no difference in tooth growth between the use of the supplement of OJ and VC at dosage of 2mg.  
+**len~OJ2~ = len~VC2~**
+
+Let the alternative hypothesis be that there is more growth in tooth with the use of the supplement of OJ than VC at dosage of 2mg.  
+**len~OJ2~ > len~VC2~**
+
+Now let's subset the data by supplement at 2mg dosage.
+```{r}
+OJ2 <- ToothGrowth$len[ToothGrowth$supp=="OJ" & ToothGrowth$dose==2]
+VC2 <- ToothGrowth$len[ToothGrowth$supp=="VC" & ToothGrowth$dose==2]
+```
+
+Then perform a one-sided t-test to test our hypothesis.
+```{r}
+t.test(OJ2, VC2, alternative = "greater", paired = FALSE, var.equal = FALSE, conf.level = 0.95)
+```
+Contrary to the t-test comparing OJ and VC, the t-test comparing OJ and VC at the dosage of 2mg yields a p-value of 0.5181, which is much greater than alpha=0.05, thus we fail to reject the null hypothesis. In other words, there is insufficient evidence to show any difference in tooth growth using the supplement OJ and VC at the dosage of 2mg.
+
+4. State the conclusions and the assumptions needed for the conclusions.
+
+The conclusions are embeded in the result interpretations for #3. 
+
+The assumptions are as follows:  
+
++ The variabels are I.I.D (independent, identically distributed)  
++ Unequal variance of tooth growth with different supplements and dosages  
++ A normal distribution for the tooth growth 
