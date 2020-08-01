@@ -1,0 +1,156 @@
+---
+title: "NLP Text Predict Backoff Model"
+author: "Jiali Lei"
+date: "7/30/2020"
+output: html_document
+---
+
+Continued from **nlp_text_predict_EDA.Rmd** code. 
+
+```{r message=FALSE, warning=FALSE}
+## Load the necessary packages 
+library(tm)
+library(tidytext)
+library(tidyr)
+library(dplyr)
+```
+
+Get text corpus from the 3 en_US files, and take a sample of it.
+```{r}
+## get the path directory of the en_US .txt files
+flist <- list.files(path = "./data", 
+                    recursive = TRUE, 
+                    pattern = ".*en_.*.txt")
+flist <- paste("./data", flist, sep="/")
+
+t_sub <- function(f, percent=1){
+        con <- file(f, open="r")
+        tf <- readLines(con, encoding = "UTF-8", skipNul = TRUE)
+        close(con)
+        # remove non-English words
+        tf <- iconv(tf, "latin1", "ASCII", sub = "")
+        set.seed(1011)
+        sample(tf, length(tf) * percent)
+}
+
+# get all texts from the 3 en_US texts
+text_sub <- sapply(flist, t_sub)  # a list of 3 character vectors
+text_sub <- c(text_sub[[1]], text_sub[[2]], text_sub[[3]])  # append them into 1 character vector
+```
+
+
+Useful functions to clean the text and get ready for text prediction.  
+And create a function to perform Katz Back-off to predict the next text.  
+```{r}
+# input text cleaning
+clean_input <- function(inputtext, 
+                        rmstopwords = TRUE, lowercase = TRUE, 
+                        rmpunctuation = TRUE, rmnumbers = TRUE, 
+                        rminternational = TRUE) {
+        if(lowercase == TRUE){inputtext <- tolower(inputtext)}
+        if(rminternational == TRUE){inputtext <- iconv(inputtext)}
+        if(rmpunctuation == TRUE){inputtext <- gsub("[[:punct:]]", "", inputtext)}
+        if(rmnumbers == TRUE){inputtext <- gsub("[0-9]", "", inputtext)}
+        if(rmstopwords == TRUE){inputtext <- removeWords(inputtext, stopwords(kind = "en"))}
+        inputtext <- gsub("\\s+", " ", inputtext)
+        return(inputtext)
+}
+
+# retrieve a desired number (n) of words from input text; default is 1 word.
+getLastWords <- function(inputtext, nWords = 1){
+        inputtext <- strsplit(inputtext, split = " ")[[1]]
+        textlength <- length(inputtext)
+        if(nWords > textlength){return("Stop! You got every words.")}
+        inputtext <- inputtext[(textlength+1-nWords):textlength]
+        return(paste0(inputtext, collapse = " "))
+}
+
+# find the entry of input text in the corpus
+katzbackoff.grep <- function(inputtext, textcorpus, minwords = 2, 
+                             rmstopwords = TRUE, rmduplicates = TRUE){
+        text <- clean_input(inputtext, rmstopwords = rmstopwords)
+        corpus_index <- NULL
+        
+        lastWords <- getLastWords(text, nWords = minwords)
+        textcorpus <- grep(lastWords, textcorpus, value = TRUE)
+        repeat{
+                new_index <- grep(text, textcorpus)
+                corpus_index <- c(corpus_index, new_index)
+                # remove the first word and repeat until it's the length of minwords
+                text <- strsplit(text, split = " ")[[1]]
+                text <- paste0(text[2:length(text)], collapse = " ")
+                if(length(strsplit(text, split = " ")[[1]]) < minwords){ break }
+        }
+        
+        if(rmduplicates == FALSE){ corpus_index <- unique(corpus_index) }
+        
+        return(corpus_index)
+}
+```
+
+
+Clean the text corpus.
+```{r}
+text_sub <- clean_input(text_sub)
+```
+
+
+Predict text. Note the **text_sub** is a huge file, so the prediction may take long.
+```{r}
+predictText <- function(inputtext, textcorpus = text_sub, 
+                        minwords = 2, nPred = 3){
+        if(length(strsplit(inputtext, split = " ")[[1]]) > 8){ print("Please be patient with longer inputs") }
+        
+        text <- clean_input(inputtext)
+        index <- katzbackoff.grep(text, textcorpus, minwords = minwords)
+        
+        if(length(index) == 0){ return("Input too short or too rare")}
+        
+        lastWords <- getLastWords(text, minwords)
+        corpus1 <- grep(lastWords, textcorpus, value = TRUE)
+        # the relevant corpus
+        corpus11 <- corpus1[index]
+        corpus11 <- data.frame(corpus11, stringsAsFactors = FALSE)
+        # use the min number of words (nWords) to make n-gram from the relevant corpus
+        ngram_table <- unnest_tokens(corpus11, ngram, corpus11,
+                                     token = "ngrams", n = minwords+1)
+        
+        keywords <- paste0("^", 
+                           getLastWords(text, minwords),
+                           collapse = "")
+        ngram_table <- filter(ngram_table,
+                              grepl(keywords, ngram))
+        
+        predict_table <- sort(table(sapply(ngram_table$ngram, 
+                                           getLastWords,
+                                           USE.NAMES = FALSE)),
+                              decreasing = TRUE)
+        
+        predict_table <- round(predict_table / sum(predict_table), 2)
+        
+        if(length(predict_table) < nPred){nPred <- length(predict_table)}
+        
+        return(predict_table[1:nPred])
+}
+```
+
+
+Sample test cases:
+```{r}
+test1 <- "I can't wait to meet someone"
+test2 <- "I don't know what I want to eat today, maybe I'll eat"
+test3 <- "After I left the airport I took a"
+test4 <- "I've been feeling sick all week, maybe I should go to the"
+```
+
+```{r}
+predictText(test1)
+predictText(test2)
+predictText(test3)
+predictText(test4)
+```
+
+
+#### Caveats
+
+There are still many times that the prediction suggested "Input too short or too rare" even with the entire 3 en_US files, hence we have an opportunity to optimize the n-gram frequency table to increase the probability of prediction output.

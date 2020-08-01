@@ -1,0 +1,238 @@
+---
+title: "NLP Text Predict - Exploratory Data Analysis"
+author: "Jiali Lei"
+date: "7/7/2020"
+output: html_document
+---
+
+### Introduction
+
+A smart keyboard can make typing on mobile devices easier in our daily lives, and there are companies developing such technology using natural language processing and predictive text models. SwiftKey, the capstone project partner, is one of the leading companies in the field and provided data for data scientists to build a predictive text product. In this exploratory data analysis, we will perform some basic analyses to understand the text data sets and lay out a preliminary plan for the steps in prediction model selections. 
+
+### Data
+
+This is the training data to get started, [Dataset](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip). It consists 4 locales, en_US, de_DE, ru_RU, and fi_FI. For this project, we will explore the text files in english (en_US).
+
+### Exploratory Data Analysis
+
+
+#### **Load Data**
+
+```{r message=FALSE, warning=FALSE}
+## Load the necessary packages 
+library(ggplot2)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(ngram)
+```
+
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+## set to the desired directory and create a data directory
+if (!file.exists("data")){
+        dir.create("data")
+}
+
+## Download the data
+dataURL <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+download.file(dataURL, destfile = "./data/swiftkey.zip", method = "curl")
+unzip("./data/swiftkey.zip", exdir = "./data")
+## file.remove("./data/swiftkey.zip")
+```
+
+
+#### Basic Summary of Text Files
+
+```{r warning=FALSE, message=FALSE}
+## get the path directory of the en_US .txt files
+flist <- list.files(path = "./data", 
+                    recursive = TRUE, 
+                    pattern = ".*en_.*.txt")
+flist <- paste("./data", flist, sep="/")
+
+## custom function to get the line count, word count, and the file size
+finfo <- sapply(flist, function(f){
+        # file size in MB
+        fsize <- file.info(f)[1]/1024/1024
+        
+        # read lines of the file
+        con <- file(f, open="r")
+        tf <- readLines(con)
+        close(con)
+        
+        # line count of file
+        lc <- length(tf)
+        
+        # word count of file
+        wc <- sum(nchar(tf))
+        
+        data.frame(fsize, lc, wc)
+})
+# convert finfo matrix to data frame
+finfo <- data.frame(t(finfo))
+colnames(finfo) <- c("file_size_MB", "line_count", "word_count")
+```
+
+The result of basic summary of the en_US text files indicates large file size and large line & word counts, therefore, it's faster with approximately 1% of the corpus to see the distribution of frequent words in the next step.
+
+```{r message=FALSE}
+## sample 1% of text corpus
+t_sub <- function(f, percent=0.01){
+        con <- file(f, open="r")
+        tf <- readLines(con, encoding = "UTF-8", skipNul = TRUE)
+        close(con)
+        # remove non-English words
+        tf <- iconv(tf, "latin1", "ASCII", sub = "")
+        set.seed(1011)
+        sample(tf, length(tf) * percent)
+}
+
+## create a corpus from samples of the 3 en_US *.txt files
+tCorpus <- VCorpus(VectorSource(sapply(flist, t_sub)))
+```
+
+#### Preprocess Corpus with **tm** transformations
+
+Use **tm_map()** function from **tm** package to perform transformations on the Corpus created above. Examples of transformation include removing whitespace, remove storwords, stemming, etc.
+
+Here's a list of bad words published by CMU-CS department - [profanity words](http://www.cs.cmu.edu/~biglou/resources/bad-words.txt).
+
+```{r message=FALSE, warning=FALSE}
+profanity_vector <- VectorSource(readLines(file("./data/badwords.txt", "r")))
+```
+
+```{r message=FALSE, warning=FALSE}
+# eliminate extra whitespace
+tCorpus <- tm_map(tCorpus, stripWhitespace)
+# convert to lower case
+tCorpus <- tm_map(tCorpus, content_transformer(tolower))
+# remove stopwords
+tCorpus <- tm_map(tCorpus, removeWords, stopwords("english"))
+# stemming 
+# tCorpus <- tm_map(tCorpus, stemDocument)
+# remove numbers 
+tCorpus <- tm_map(tCorpus, removeNumbers)
+# remove punctuations
+tCorpus <- tm_map(tCorpus, removePunctuation)
+# remove bad words / profanity
+tCorpus <- tm_map(tCorpus, removeWords, profanity_vector)
+```
+
+#### Create a Document-Term Matrix
+
+Next, we convert the corpus to a document matrix to count the word frequency, which can be visualized with a word cloud.
+
+```{r}
+# create a term-document matrix
+dtm <- DocumentTermMatrix(tCorpus)
+dtm_mat <- as.matrix(dtm)
+# tally up the frequency of each word across 3 text files, and sort in descending order
+words <- sort(colSums(dtm_mat), decreasing = TRUE)
+dtm_df <- data.frame(word = names(words), freq = words)
+# create a word cloud to show more frequent words
+set.seed(1234)
+wordcloud::wordcloud(words = dtm_df$word, 
+                     freq = dtm_df$freq,
+                     min.freq = 500,
+                     max.words = 300,
+                     rot.per = 0.35,
+                     random.order = FALSE,
+                     scale = c(2, 0.2),
+                     colors = brewer.pal(8, "Dark2"))
+```
+
+
+### N-Gram Modeling
+
+An n-gram model is a type of probabilistic language model for predicting the next item in such a sequence in the form of a (n-1)-order Markov model. 
+
+**NOTE**: Uni-gram is equivalent to what the previous word cloud shows the frequency of each word in the 3 text files. 
+
+```{r}
+# create tokenizer for 1-4 grams
+unigramTokenizer <- function(x) 
+        unlist(lapply(ngrams(words(x), 1), paste, collapse=" "), use.names = FALSE)
+bigramTokenizer <- function(x) 
+        unlist(lapply(ngrams(words(x), 2), paste, collapse=" "), use.names = FALSE)
+trigramTokenizer <- function(x) 
+        unlist(lapply(ngrams(words(x), 3), paste, collapse=" "), use.names = FALSE)
+quadgramTokenizer <- function(x) 
+        unlist(lapply(ngrams(words(x), 4), paste, collapse=" "), use.names = FALSE)
+
+# convert corpus to document term matrix per n-grams
+unigram_dtm <- DocumentTermMatrix(tCorpus, control = list(tokenize=unigramTokenizer))
+bigram_dtm <- DocumentTermMatrix(tCorpus, control = list(tokenize=bigramTokenizer))
+trigram_dtm <- DocumentTermMatrix(tCorpus, control = list(tokenize=trigramTokenizer))
+quadgram_dtm <- DocumentTermMatrix(tCorpus, control = list(tokenize=quadgramTokenizer))
+
+# a function to tally up the frequency of each word across 3 text files, and sort in descending order
+ngram_dtm_df <- function(x) {
+        x_mat <- as.matrix(x)
+        n_grams <- sort(colSums(x_mat), decreasing = TRUE)
+        x_df <- data.frame(n_grams = names(n_grams), freq = n_grams, stringsAsFactors = FALSE)
+        x_df
+}
+unigram_df <- ngram_dtm_df(unigram_dtm)
+bigram_df <- ngram_dtm_df(bigram_dtm)
+trigram_df <- ngram_dtm_df(trigram_dtm)
+quadgram_df <- ngram_dtm_df(quadgram_dtm)
+
+# to free memory
+rm(unigram_dtm)
+rm(bigram_dtm)
+rm(trigram_dtm)
+rm(quadgram_dtm)
+
+# plot the top frequent words or 2-/3-/4-grams phrases in the combined corpus
+ggplot(unigram_df[1:25,], aes(x=reorder(n_grams, freq), y=freq)) +
+        geom_bar(stat = "identity") +
+        coord_flip() +
+        xlab("(Unigram) Words") +
+        ylab("Frequency") +
+        labs(title = "Top 25 Frequent Words")
+ggplot(bigram_df[1:25,], aes(x=reorder(n_grams, freq), y=freq)) +
+        geom_bar(stat = "identity") +
+        coord_flip() +
+        xlab("Bigram Words") +
+        ylab("Frequency") +
+        labs(title = "Top 25 Frequent Bigrams")
+ggplot(trigram_df[1:25,], aes(x=reorder(n_grams, freq), y=freq)) +
+        geom_bar(stat = "identity") +
+        coord_flip() +
+        xlab("Trigram Words") +
+        ylab("Frequency") +
+        labs(title = "Top 25 Frequent Trigrams")
+ggplot(quadgram_df[1:25,], aes(x=reorder(n_grams, freq), y=freq)) +
+        geom_bar(stat = "identity") +
+        coord_flip() +
+        xlab("Quadgram / 4-Grams Words") +
+        ylab("Frequency") +
+        labs(title = "Top 25 Frequent 4-Grams")
+```
+
+
+
+#### N-Gram Prediction
+
+The prediction of the n-th word in n-grams model is based on the (n-1)-gram of the n-gram dictionary. For example if a user typed "let us" (bi-grams) on a keyboard, the prediction model will look through the tri-gram dictionary and suggest the next word based on the most frequent tri-grams starting with "let us". 
+
+```{r echo=FALSE}
+head(trigram_df[grep("^let us", trigram_df$n_grams),], 3)
+```
+
+
+### Next Plan
+
+* The analysis and visualization above is based on the combined corpus of blogs, news, and twitter, so it's worth considering the frequency of words and n-grams from each file. Consider the term frequency-inverse document frequency ([tf-idf](https://en.wikipedia.org/wiki/Tf–idf)) to appropriate the weight of terms from each file in the prediction model.  
+* If the n-grams dictionary is not sufficient to predict the next word, then consider 
+        (1) expand the training corpus to increase the variety of texts and build a better n-grams dictionary;
+        (2) "downgrade" from n-grams dictionary to (n-1)-grams dictionary to predict the next word; for example, 5-grams dictionary doesn't contain a phrase starting with "wish you happy new", then look for "you happy new" in 4-grams dictionary for the prediction of the next word, then look for "happy new" in 3-grams dictionary if 4-grams dictionary has nothing to match the phrase, and so on and so forth till the most frequent word (uni-grams);
+        (3) directly suggest "the", "and", or the most frequent stopwords if all fails.   
+* Perform sentence sentiment analysis to predict what the user types is of positive or negative sense; consider remove profanity or other abusive words from the data.  
+* Consider other prediction methods such as clustering words or phrases and calculating distance/association score between words to suggest the next word.  
+
+### Reference Documents
+
+1. [Introduction to the **tm** Package - Text Mining in R](https://cran.r-project.org/web/packages/tm/vignettes/tm.pdf)  
+2. [Guide to the **ngram** Package](https://cran.r-project.org/web/packages/ngram/vignettes/ngram-guide.pdf)  
+3. [tf-idf](https://en.wikipedia.org/wiki/Tf–idf)

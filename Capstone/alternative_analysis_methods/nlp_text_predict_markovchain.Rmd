@@ -1,0 +1,222 @@
+---
+title: "NLP Text Predict with Markov Chain"
+author: "Jiali Lei"
+date: "7/23/2020"
+output: html_document
+---
+
+Continued from **nlp_text_predict_EDA.Rmd** code. 
+
+```{r message=FALSE, warning=FALSE}
+## Load the necessary packages 
+library(qdap)
+library(textclean)
+library(tidytext)
+library(stringr)
+library(tidyr)
+library(dplyr)
+```
+
+```{r}
+# sample 1% of texts from the 3 en_US texts
+text_sub <- sapply(flist, t_sub)  # a list of 3 character vectors
+text_sub <- c(text_sub[[1]], text_sub[[2]], text_sub[[3]])  # append them into 1 character vector
+
+# sample 100 lines from the text_sub to reduce the data fed into model fit later
+# sample more to avoid "out of bound" error in prediction, ie. the input text cannot be found in the corpus to predict next word.
+# sample less to speed up the model training, depending on the RAM and PC performance.
+set.seed(1311)
+text_sub <- sample(text_sub, 4000) # tweak the sample size as desired.
+
+
+# text cleaning
+text_clean <- tibble::tibble(text_sub) %>% 
+        mutate(text = tolower(text_sub)) %>%
+        mutate(text = text %>%
+                       str_replace(pattern="--", replacement=" ") %>%
+                       str_remove_all(pattern="(?![.,!])[[:punct:]]") %>% 
+                       str_remove_all(pattern="[0-9]") %>%
+                       replace_contraction() %>% # I'll menjadi I will
+                       replace_white() %>% # remove double white space
+                       str_replace_all(pattern="[.]", replacement=" .") %>%
+                       str_replace_all(pattern="[!]", replacement=" !") %>%
+                       str_replace_all(pattern="[,]", replacement=" ,"))
+
+# just pull out the characters to prepare model fit
+text_train <- text_clean %>% 
+    pull(text) %>% 
+    strsplit(" ") %>% 
+    unlist() 
+
+text_train %>% head(10)
+```
+
+
+```{r}
+# fit the data into Markov Chain
+mc_fit <- markovchain::markovchainFit(text_train)
+# saveRDS(mc_fit, "unigram_text.rds")
+
+# generate sentences with the next 10 words
+for (i in 1:10) {
+    
+        set.seed(i)
+        
+        markovchain::markovchainSequence(n = 10, 
+                                        markovchain = mc_fit$estimate,
+                                        t0 = "just", 
+                                        include.t0 = T) %>% 
+            
+            # joint words 
+            paste(collapse = " ") %>%
+         
+            # create proper sentence form
+            str_replace_all(pattern = " ,", replacement = ",") %>% 
+            str_replace_all(pattern = " [.]", replacement = ".") %>% 
+            str_replace_all(pattern = " [!]", replacement = "!") %>%
+         
+            str_to_sentence() %>% 
+         
+            print()
+}
+```
+
+Create a function that will return a set of words with the highest probability for the next step.
+```{r}
+predictive_text <- function(text, num_word){
+        text <- strsplit(text, " ") %>% 
+                unlist() %>% 
+                tail(1)
+   
+        # exclude punctuation
+        punctuation <- which(mc_fit$estimate[tolower(text), ] %>% 
+                                     names() %>% 
+                                     str_detect("[:punct:]"))
+        
+        suggest <- mc_fit$estimate[tolower(text), -punctuation] %>%
+        sort(decreasing = T) %>% 
+        head(num_word) 
+        
+        suggest <- suggest[suggest > 0] %>% names()
+        
+        return(suggest)
+}
+
+predictive_text("want some to", 8)
+```
+
+Above is to predict the next text with uni-gram. Next, let's try bi-gram: predicting the next word with previous 2 words together. 
+```{r}
+bigram_text <- text_clean %>% 
+        unnest_tokens(bigram, text, token = "ngrams", n = 2) %>% 
+        pull(bigram)
+
+bigram_text %>% head(10)
+```
+
+```{r}
+# model fit
+set.seed(1234)
+# sample from bigram_text in the case of memory constraint
+mc_bigram <- markovchain::markovchainFit(sample(bigram_text, 5000))
+saveRDS(mc_bigram, "bigram_text.rds")
+
+# predict function
+predictive_text <- function(text, num_word){
+   
+        suggest <- mc_bigram$estimate[tolower(text), ] %>%
+                sort(decreasing = T) %>% 
+                head(num_word) 
+        
+        suggest <- suggest[suggest > 0] %>% 
+                names() %>% 
+                str_extract(pattern = "\\s(.*)") %>% 
+                str_remove("[ ]")
+        
+        return(suggest)
+}
+
+predictive_text("want some", 5) 
+```
+
+
+Next, let's try tri-gram: predicting the next word with previous 3 words together. 
+```{r}
+trigram_text <- text_clean %>% 
+        unnest_tokens(trigram, text, token = "ngrams", n = 3) %>% 
+        pull(trigram)
+
+trigram_text %>% head(10)
+```
+
+```{r}
+# model fit
+mc_trigram <- markovchain::markovchainFit(trigram_text)
+# saveRDS(mc_trigram, "trigram_text.rds")
+
+# predict function
+predictive_text <- function(text, num_word){
+   
+        suggest <- mc_trigram$estimate[tolower(text), ] %>%
+                sort(decreasing = T) %>% 
+                head(num_word) 
+        
+        suggest <- suggest[suggest > 0] %>% 
+                names() %>% 
+                str_extract(pattern = "\\s(.*)") %>% 
+                str_remove("[ ]")
+        
+        return(suggest)
+}
+
+predictive_text("passed my crossfit", 5) 
+```
+
+
+Combine the 3 Markov Chain predictive functions, such that if it's trigram prediction, it uses the last 3 words to predict the next one; if it's bigram, it uses the last 2 words to predict the next one; all else defaults to unigram prediction.
+```{r}
+predictive_text <- function(text, num_word){
+        
+        if (length(text) == 3) {
+                suggest <- mc_trigram$estimate[tolower(text), ] %>%
+                sort(decreasing = T) %>% 
+                head(num_word) 
+        
+                suggest <- suggest[suggest > 0] %>% 
+                names() %>% 
+                str_extract(pattern = "\\s(.*)") %>% 
+                str_remove("[ ]")
+        }
+        
+        else if (length(text) == 2) {
+                suggest <- mc_bigram$estimate[tolower(text), ] %>%
+                sort(decreasing = T) %>% 
+                head(num_word) 
+        
+                suggest <- suggest[suggest > 0] %>% 
+                names() %>% 
+                str_extract(pattern = "\\s(.*)") %>% 
+                str_remove("[ ]")
+        }
+        
+        else {
+                text <- strsplit(text, " ") %>% 
+                unlist() %>% 
+                tail(1)
+   
+                # exclude punctuation
+                punctuation <- which(mc_fit$estimate[tolower(text), ] %>% 
+                                             names() %>% 
+                                             str_detect("[:punct:]"))
+                
+                suggest <- mc_fit$estimate[tolower(text), -punctuation] %>%
+                sort(decreasing = T) %>% 
+                head(num_word) 
+                
+                suggest <- suggest[suggest > 0] %>% names()
+        }
+        
+        return(suggest)
+}
+```
+
