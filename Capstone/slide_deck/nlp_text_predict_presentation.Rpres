@@ -58,4 +58,4 @@ The app can be accessed here:
 
 The entire project (including data, exploratory analysis, predictive models, and shiny app) can be found here:
 
-[https://github.com/jiali-lei/DataScienceCoursera/tree/master/capstone](https://github.com/jiali-lei/DataScienceCoursera/tree/master/capstone)
+[https://github.com/jiali-lei/DataScienceCoursera/tree/master/Capstone](https://github.com/jiali-lei/DataScienceCoursera/tree/master/Capstone)
